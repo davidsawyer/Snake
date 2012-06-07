@@ -6,40 +6,76 @@ import java.util.LinkedList;
 import java.util.Queue;
 public class SnakePanel extends JPanel implements ActionListener {
     
-    private final int SQUARE_INTERVAL = 20;
     private GridLayout gridLayout;
     private Rectangle[][] squareGrid = new Rectangle[30][30];
     private Queue<Rectangle> snake = new LinkedList<Rectangle>();
     private Thread t1, t2, t3;
     private Timer timer;
-    private boolean down = true, up = false, left = false, right = false;
-    private boolean waitingForNextInterval = false;
+    private boolean down, up, left, right;
+    private boolean waitingForNextInterval;
     
-    private int PANEL_SIDE_LENGTH = 600;
-    private int SQUARE_SIDE = 18;
-    private int BEGDELAY = 125;
-    //private int INTDELAY = 100;
-    //private int EXPDELAY = 50;
+    private final int SQUARE_INTERVAL = 20;
+    private final int PANEL_SIDE_LENGTH = 600;
+    private final int SQUARE_SIDE = 18;
+    private final int EASY_DELAY = 125;
+    private final int MED_DELAY = 100;
+    private final int HARD_DELAY = 50;
     private Color snakeColor = Color.white;
     private Color bgColor = Color.black;
     private Color borderColor = Color.red;
     private int lastX, lastY;
     private Rectangle fruit;
-    private boolean growingSnake = false;
-    private int growthLeft = 3;
+    private boolean growingSnake;
+    private int growthLeft;
+    private boolean gameOver = false;
+    //private JLabel fruitImage;
+    //private ImageIcon apple;
+    private JLabel score = new JLabel("SCORE:" + snake.size(), JLabel.LEFT);
+    private boolean isPaused = false;
     
     public SnakePanel() {
         
+        //setLayout(null);
         addKeyListener(new KeyLstnr());
         setFocusable(true);
+        
+        timer = new Timer(MED_DELAY, this);
+        
+        score.setFont(new Font("Courier New", Font.BOLD, 14));
+        score.setForeground(Color.white);
+
     }
     
     // sets up the game arena and essential elements of the game
     public void initGameplay() {
         
-        initGraphics();
+        waitingForNextInterval = false;
+        growingSnake = false;
+        growthLeft = 3;
         
-        timer = new Timer(BEGDELAY, this);
+        up = false;
+        down = true;
+        left = false;
+        right = false;
+        
+        if (!gameOver) {
+            
+            initGraphics();
+            //fruitImage = new JLabel();
+            //apple = new ImageIcon("images/apple.png");
+            //fruitImage.setIcon(apple);
+        }
+        
+        else {
+            
+            gameOver = false;
+            initSnake();
+            setFruitLocation();
+        }
+        
+        add(score);
+
+        
         timer.start();
     }
     
@@ -55,6 +91,7 @@ public class SnakePanel extends JPanel implements ActionListener {
         } while (snake.contains(squareGrid[x][y]));
         
         fruit = squareGrid[x][y];
+        
         paint(Color.green, fruit);
     }
     
@@ -79,7 +116,7 @@ public class SnakePanel extends JPanel implements ActionListener {
                 
                 squareGrid[x][y] = new Rectangle(x*20+2, y*20+2, SQUARE_SIDE, SQUARE_SIDE);
                 
-                paint(bgColor, x, y);
+                paint(bgColor, squareGrid[x][y]);
                 
             }
         }
@@ -93,11 +130,12 @@ public class SnakePanel extends JPanel implements ActionListener {
         
         checkCollision(i, j);
         
-        Graphics g = getGraphics();
-        g.setColor(newColor);
-        g.fillRect(((int)(squareGrid[i][j].getX())), (int)(squareGrid[i][j].getY()), SQUARE_SIDE, SQUARE_SIDE);    
+        if (!gameOver) {
+            Graphics g = getGraphics();
+            g.setColor(newColor);
+            g.fillRect(((int)(squareGrid[i][j].getX())), (int)(squareGrid[i][j].getY()), SQUARE_SIDE, SQUARE_SIDE);    
+        }
     }
-    
     // overloaded method adapted to receive a Rectangle as a parameter
     private void paint(Color newColor, Rectangle rect) {
         
@@ -105,14 +143,17 @@ public class SnakePanel extends JPanel implements ActionListener {
         g.setColor(newColor);
         g.fillRect(((int)(rect.getX())), (int)(rect.getY()), SQUARE_SIDE, SQUARE_SIDE);
     }
-
+    
     // adds a new segment to the snake
     private void addSegment(int x, int y) {
         
         paint(snakeColor, x, y);
-        snake.add(squareGrid[x][y]);
-        lastX = x;
-        lastY = y;
+        
+        if (!gameOver) {
+            snake.add(squareGrid[x][y]);
+            lastX = x;
+            lastY = y;
+        }
     }
     
     // decides which square the snake will inhabit next and paints it appropriately
@@ -136,8 +177,11 @@ public class SnakePanel extends JPanel implements ActionListener {
     private void checkCollision(int x, int y) {
         
         if (x<0 || y<0 || x>29 || y>29 || snake.contains(squareGrid[x][y])) { 
-            System.out.println("SCORE: " +snake.size());
-            System.exit(0);
+            
+            gameOver = true;
+            timer.stop();
+            snake.clear();
+            wipeArena();
         }
     }
     
@@ -154,11 +198,11 @@ public class SnakePanel extends JPanel implements ActionListener {
         
         else if (left)
             addSegment(lastX-1, lastY);
-
+        
         else if (right)
             addSegment(lastX+1, lastY);
-                
-        if (!growingSnake) {
+        
+        if (!growingSnake && !gameOver) {
             
             wipeGap();
             paint(bgColor, snake.remove());
@@ -190,7 +234,7 @@ public class SnakePanel extends JPanel implements ActionListener {
             g.fillRect((int)squareGrid[lastX+1][lastY].getX() - 2, (int)squareGrid[lastX+1][lastY].getY(), 2, SQUARE_SIDE);
         }    
     }
-                  
+    
     // undo what paintGap did
     private void wipeGap() {
         
@@ -204,6 +248,25 @@ public class SnakePanel extends JPanel implements ActionListener {
         g.fillRect(x, y + SQUARE_SIDE, SQUARE_SIDE, 2); // bottom gap
         g.fillRect(x - 2, y, 2, SQUARE_SIDE); // left gap
         g.fillRect(x + SQUARE_SIDE, y, 2, SQUARE_SIDE); // right gap
+    }
+    
+    private void wipeArena() {
+        
+        Graphics g = getGraphics();
+        g.setColor(bgColor);
+        
+        g.fillRect(0, 0, 602, 604);
+    }
+    
+    // pauses code execution for a certain number of milliseconds
+    private void sleep(int milliseconds) {
+        
+        try {
+            Thread.sleep(milliseconds);
+        }
+        catch (InterruptedException e) {
+            System.exit(-1);
+        }
     }
     
     // everything in this method is fired every *DELAY milliseconds
@@ -220,7 +283,13 @@ public class SnakePanel extends JPanel implements ActionListener {
             
             growingSnake = false;
             growthLeft = 3;
-        }        
+        }
+        
+        score.setText("SCORE:" + snake.size());
+        repaint(score.getX(), score.getY(), score.getWidth(), score.getHeight());
+        //getGraphics().setColor(Color.black);
+        //getGraphics().fillRect(score.getX(), score.getY(), score.getWidth(), score.getHeight());
+        //score.update(getGraphics());
     }
     
     // listener to receive directional input from the keyboard
@@ -228,9 +297,30 @@ public class SnakePanel extends JPanel implements ActionListener {
         
         public void keyPressed(KeyEvent e) {
             
-            if (waitingForNextInterval) return;
-            
             int key = e.getKeyCode();
+            
+            if (gameOver) {
+                
+                initGameplay();
+                return;
+            }
+            
+            else if (key == KeyEvent.VK_P) {
+                
+                if (!isPaused) {
+                    
+                    timer.stop();
+                    isPaused = true;
+                }
+                
+                else {
+                    
+                    timer.start();
+                    isPaused = false;
+                }
+            }
+            
+            if (waitingForNextInterval) return;
             
             if (key == KeyEvent.VK_UP && !down) {
                 
